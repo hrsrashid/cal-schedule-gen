@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width,user-scalable=no,minimum-scale=1,maximum-scale=1,initial-scale=1">
+    <title>Calendar schedule generator</title>
+    <?!= include('style'); ?>
+    <?!= include('script'); ?>
+  </head>
+  <body ng-app="calgen" ng-controller="MainCtrl as main" ng-cloak>
+    <md-toolbar class="md-whiteframe-z2">
+      <div class="md-toolbar-tools">
+        <md-button class="md-icon-button" ng-click="sideOpen = !sideOpen" hide-gt-md>
+          <md-icon class="material-icons">menu</md-icon>
+        </md-button>
+        <md-icon class="material-icons">event</md-icon>
+        <h1 class="md-display-1" layout-padding>Calendar schedule generator</h1>
+        <span flex></span>
+      </div>
+    </md-toolbar>
+
+    <section
+      layout="row"
+      flex     
+      state-persistent>
+      <md-sidenav
+        md-is-open="sideOpen"
+        md-is-locked-open="$mdMedia('gt-md')"
+        class="md-whiteframe-z2">
+        <md-subheader>Term ID</md-subheader>
+        <md-content layout-padding>
+          <md-input-container>
+            <input type="text" required ng-model="termId" placeholder="Type term ID">
+          </md-input-container>
+        </md-content>
+        
+        <md-subheader>Term period</md-subheader>
+        <md-content>
+          <md-datepicker ng-model="termStart" md-placeholder="Start date" md-max-date="termEnd" required></md-datepicker>
+          <md-datepicker ng-model="termEnd" md-placeholder="End date" md-min-date="termStart" required></md-datepicker>
+        </md-content>
+        
+        <md-subheader style="margin-top: 30px;">Starts with</md-subheader>
+        <md-content layout-padding>
+          <md-select ng-model="startWeek">
+            <md-option ng-value="'high'">High week</md-option>
+            <md-option ng-value="'low'">Low week</md-option>
+          </md-select>
+        </md-content>
+        
+        <md-subheader style="margin-top: 30px;">Subject list</md-subheader>
+        <md-content layout-padding>
+          <form flex layout="row" layout-align="space-between center">
+            <md-input-container>
+              <input type="text" placeholder="Add subject" ng-model="newSubject">
+            </md-input-container>
+            
+            <md-button class="" type="submit" ng-click="addSubject()">
+              <md-icon class="material-icons">add</md-icon>
+            </md-button>
+          </form>
+        </md-content>
+        
+        <md-list layout-padding>
+          <md-list-item ng-repeat="subject in getSubjects()" flex layout="row">
+            <div class="md-list-item-text" flex-grow>
+              <h3 class="md-title">{{ subject }}</h3>
+            </div>
+            <md-button ng-click="removeSubject(subject)">
+              <md-icon class="material-icons">delete</md-icon>
+            </md-button>
+          </md-list-item>
+        </md-list>
+      </md-sidenav>
+      
+      <md-content flex layout-padding>
+        <section flex layout="row" layout-align="start center">
+          <h2 class="md-headline">Schedule</h2>
+          <md-button
+            class="md-raised md-primary"
+            ng-click="sendSchedule()"
+            ng-disabled="loading">
+            Add to your calendar
+          </md-button>
+          <md-progress-circular md-mode="indeterminate" ng-show="loading"></md-progress-circular>
+          <md-icon class="material-icons md-accent" ng-show="success">done</md-icon>
+          <span ng-show="error" class="md-warn">
+            <md-tooltip>
+              Error: {{ errorText }}
+            </md-tooltip>
+            <md-icon class="material-icons md-warn">error</md-icon>
+          </span>
+          <span flex></span>
+        </section>
+        
+        <div class="schedule" flex layout="row" layout-wrap>
+          <md-card class="day" ng-repeat="day in days">
+            <md-card-header>
+              <md-card-header-text>{{ day.toUpperCase().split('').join(" ") }}</md-card-header-text>
+            </md-card-header>
+          
+            <md-list>
+              <md-list-item
+                ng-repeat="time in timing"
+                flex layout="row"
+                layout-align="start center"
+                layout-margin>
+                <div class="time" flex="none">
+                  <span class="time-t">{{ time[0] }}</span>
+                  <span>–</span>
+                  <span class="time-t">{{ time[1] }}</span>
+                </div>
+                
+                <div class="subject">                  
+                  <div ng-repeat="weekType in ['high', 'every', 'low']"
+                    class="{{weekType}}-week"
+                    ng-class="{shrink: !isSelectedWeekType(schedule[day][time[0]], weekType) }"
+                    flex layout="row"
+                    layout-align="space-between center">
+                    <md-select ng-model="schedule[day][time[0]][weekType]" placeholder="Select subject ({{weekType}} week)" flex>
+                      <md-option ng-value="">--</md-option>
+                      <md-option ng-repeat="subj in getSubjects()" ng-value="subj">{{ subj }}</md-option>
+                    </md-select>
+                    
+                    <md-input-container md-no-float>
+                      <input type="text" placeholder="location" size="5" ng-model="schedule[day][time[0]][weekType + '_location']">
+                    </md-input-container>
+                  </div>
+                </div>
+                
+                <md-button class="md-icon-button" ng-click="schedule[day][time[0]].split = !schedule[day][time[0]].split">
+                  <md-icon class="material-icons" ng-show="schedule[day][time[0]].split">view_day</md-icon>
+                  <md-icon class="material-icons" ng-hide="schedule[day][time[0]].split">view_agenda</md-icon>
+                </md-button>
+              </md-list-item>
+            </md-list>
+          </md-card>
+        </div>
+      </md-content>
+    </section>
+  </body>
+</html>
+
+
+

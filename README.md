@@ -1,0 +1,10 @@
+# Calendar schedule generator
+
+Add your college/university curriculum to your Google Calendar.  
+Creates calendar "Term schedule (termId)" with event series specified in the app.
+
+[Chrome Web Store page](https://chrome.google.com/webstore/detail/calendar-schedule-generat/mmmeeobaanfnahccdooglolpdocielgc)
+
+[Run on Google Apps Script](https://script.google.com/macros/s/AKfycbzmKVB6vhhcV7_O-fBMVG33kPSSm8DyQIJlDEkjHscEQtxgGBfx/exec)
+
+[Source on Google Apps Script](https://script.google.com/d/1wPdeLnjb-qLnfzM_hxWhblZwvnWDjAh2eVS_4qZArKNuhe8DuzMqL7CV/edit?usp=sharing)

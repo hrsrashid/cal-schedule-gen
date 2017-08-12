@@ -1,0 +1,245 @@
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular-animate.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular-aria.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular-messages.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angular_material/1.0.9/angular-material.min.js"></script>
+<script>
+angular.module('calgen', ['ngMaterial'])
+
+.constant('Timing',
+  [ ['8:00',  '9:30']
+  , ['9:40',  '11:10']
+  , ['11:30', '13:00']
+  , ['13:10', '14:40']
+  , ['15:00', '16:30']
+  , ['16:40', '18:10']
+  ])
+  
+.constant('DaysOfWeek',
+  [ 'Monday'
+  , 'Tuesday'
+  , 'Wednesday'
+  , 'Thursday'
+  , 'Friday'
+  , 'Saturday'
+  ])
+  
+.service('Subjects', function() {
+  this.subjects = [];
+  
+  this.add = function(newSubject) {
+    if (!newSubject) {
+      return;
+    }
+    
+    this.subjects.unshift(newSubject);
+  }
+  
+  this.remove = function(subj) {
+    this.subjects = this.subjects.filter(function(i) { return i !== subj });
+  }
+  
+  this.getAll = function() {
+    return this.subjects;
+  }
+  
+  this.exists = function(subj) {
+    return this.subjects.includes(subj);
+  }
+})
+
+.service('Schedule', function(DaysOfWeek, Timing, Subjects) {
+  this.schedule = {};  
+  
+  this.iterate = function(cb) {
+    for (var dayIndex in DaysOfWeek) {
+      var day = DaysOfWeek[dayIndex];
+      
+      if (!this.schedule[day]) {
+        this.schedule[day] = {};
+      }
+      
+      for (var timeIndex in Timing) {
+        var time = Timing[timeIndex][0];
+        
+        if (!this.schedule[day][time]) {
+          this.schedule[day][time] = {high: "", low: "", every: "", split: false};
+        }
+        
+        if (typeof cb == 'function') {
+          cb(day, time, this.schedule[day][time]);
+        }
+      }
+    }    
+  }
+  
+  this.assign = function(newSchedule) {
+    Object.assign(this.schedule, newSchedule);
+    
+    this.removeIf(function(s) {
+      return !Subjects.exists(s);
+    });
+  }
+  
+  this.removeAll = function(subj) {
+    this.removeIf(function(s) { return s == subj; });
+  }
+  
+  this.removeIf = function(testFn) {
+    this.iterate(function(d, t, schedule) {
+      ['high', 'low', 'every'].forEach(function(key) {
+        if (testFn(schedule[key])) {
+          schedule[key] = "";
+          schedule[key+"_location"] = "";
+        }
+      });
+    });
+  }  
+  
+  this.iterate(); // init
+})
+
+.controller('MainCtrl', function($scope, $mdToast, Timing, DaysOfWeek, Subjects, Schedule) {
+  $scope.timing = Timing;
+  $scope.days = DaysOfWeek;
+  $scope.startWeek = 'high';
+  $scope.termStart = new Date();
+  $scope.termEnd = new Date($scope.termStart.getTime() + 4*30*24*60*60*1000);
+  $scope.getSubjects = Subjects.getAll.bind(Subjects);
+  
+  $scope.removeSubject = function(subj) {
+    Subjects.remove(subj);
+    Schedule.removeAll(subj);
+  }
+  
+  $scope.addSubject = function() {
+    Subjects.add($scope.newSubject);
+    $scope.newSubject = "";
+  }
+  
+  $scope.schedule = Schedule.schedule;
+  
+  $scope.isSelectedWeekType = function(model, weekType) {
+    return model.split ^ (weekType == 'every');
+  }
+  
+  
+  var invalid = function() {
+    var errorText = "";
+    
+    if (!$scope.termId) {
+      errorText += "Type term ID (eg. 1). ";
+    }
+    
+    if ($scope.termStart >= $scope.termEnd) {
+      errorText += "Check term start < end. "; 
+    }
+    
+    if (errorText) {
+      $mdToast.show($mdToast.simple()
+        .textContent(errorText)
+        .position('top right')
+        .hideDelay(3000)
+      );
+    }
+    
+    return !!errorText;
+  };
+  
+  
+  $scope.sendSchedule = function() {
+    if (invalid()) {
+      return;
+    }
+  
+    $scope.loading = true;
+    $scope.error = false;
+    $scope.success = false;
+    $scope.errorText = '';
+    
+    google.script.run
+      .withSuccessHandler(function() {
+        $scope.$apply(function() {
+          $scope.loading = false;
+          $scope.success = true;
+        });
+      })
+      .withFailureHandler(function(e) {
+        $scope.$apply(function() {
+          $scope.loading = false;
+          $scope.error = true;
+          $scope.errorText = e.name + ": " + e.message;
+        });
+      })
+      .saveSchedule(
+        $scope.termId,
+        $scope.termStart.toString(),
+        $scope.termEnd.toString(),
+        $scope.startWeek,
+        $scope.schedule
+      );
+  }
+})
+
+.directive('statePersistent', function($filter, Subjects, Schedule) {
+  return function(scope, element) {
+    var loaded = false;
+    
+    var loadState = function(state) {
+      scope.$apply(function() {
+        scope.termId = state.termId;
+        scope.termStart = new Date(state.termStart);
+        scope.termEnd = new Date(state.termEnd);
+        scope.startWeek = state.startWeek;
+        Subjects.subjects.splice.apply(
+          Subjects.subjects,
+          [0, Subjects.subjects.length].concat(state.subjects)
+        );
+        Schedule.assign(state.schedule);
+        setTimeout(function() {loaded = true;}, 1);
+      });
+    };
+    
+    var savingTimeoutId;
+    var saveState = function(a, b) {
+      if (!loaded || angular.equals(a, b)) return;
+
+      clearTimeout(savingTimeoutId);
+      
+      savingTimeoutId = setTimeout(function() {
+        google.script.run
+          .withSuccessHandler(function() {
+            saving = false;
+          })
+          .withFailureHandler(function() {
+            saving = false
+          })
+          .saveState(getState());
+      }, 1000);
+    };
+    
+    var getState = function() {
+      return {
+        termId: scope.termId,
+        termStart: scope.termStart.toString(),
+        termEnd: scope.termEnd.toString(),
+        startWeek: scope.startWeek,
+        schedule: Schedule.schedule,
+        subjects: Subjects.getAll()
+      };
+    };
+    
+    google.script.run
+      .withSuccessHandler(loadState)
+      .loadState();
+    
+    scope.$watch('termId', saveState);
+    scope.$watch('termStart', saveState);
+    scope.$watch('termEnd', saveState);
+    scope.$watch('startWeek', saveState);
+    scope.$watch('schedule', saveState, true);
+    scope.$watchCollection('getSubjects()', saveState);
+  }
+})
+</script>
